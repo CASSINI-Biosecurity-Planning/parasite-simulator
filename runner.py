@@ -10,8 +10,8 @@ import glob
 import json
 import random
 
-# particle_model = OceanDrift(loglevel=20)
-particle_model = SeaLice(loglevel=20)
+particle_model = OceanDrift(loglevel=20)
+# particle_model = SeaLice(loglevel=20)
 
 
 def get_all_finfish():
@@ -35,9 +35,9 @@ def seed_farm_data(data: dict, N: int, r: int, start_time) -> [object]:
 def get_readers(locations):
     thredds_catalog = {
         'norway': 'https://thredds.met.no/thredds/dodsC/cmems/topaz6/dataset-topaz6-arc-15min-3km-be.ncml',
-        'greece': 'https://nrt.cmems-du.eu/thredds/dodsC/cmems_mod_med_phy-cur_anfc_4.2km_PT1H-m',
+        'greece': ['https://nrt.cmems-du.eu/thredds/dodsC/cmems_mod_med_phy-cur_anfc_4.2km_PT1H-m','https://nrt.cmems-du.eu/thredds/dodsC/cmems_mod_med_phy-sal_anfc_4.2km_PT1H-m','https://nrt.cmems-du.eu/thredds/dodsC/cmems_mod_med_phy-tem_anfc_4.2km_PT1H-m' ]
     }
-    return [thredds_catalog[desired] for desired in locations]
+    return thredds_catalog[locations]
 
 
 def read_json(path):
@@ -47,7 +47,7 @@ def read_json(path):
 
 
 def get_current_json_file(country, type: str):
-    return glob.glob(f"**/{country}_{type}.json", recursive=1)
+    return glob.glob(f"**/{country}_*_{type}.json", recursive=1)
 
 
 def run_model(*args, **kwargs):
@@ -70,7 +70,7 @@ def run_model(*args, **kwargs):
     duration = kwargs.pop('duration', timedelta(10))
 
     N = kwargs.pop('N', 100)  # 100 particles
-    r = kwargs.pop('r', 1000)  # 1 km radius
+    r = kwargs.pop('r', 80)  # 1 km radius
     lat, lon = kwargs.pop('center_pos', (60.1, 4.4))
 
     start_time = kwargs.pop('start_time', datetime.utcnow() - timedelta(10))
@@ -79,15 +79,15 @@ def run_model(*args, **kwargs):
     outfile = kwargs.pop('outfile', f'{random.random()}.nc')
 
     if  'seed_from_json' in kwargs:
-        print("loo")
         datasource = kwargs.pop('seed_from_json')
-        seed_data = read_json(datasource[0])
+        seed_data = read_json(datasource[-1])
         seed_data = seed_farm_data(seed_data, N, r, start_time)
+        print(len(seed_data))
         for item in seed_data:
             particle_model.seed_from_geojson(json.dumps(item))
     else:
         particle_model.seed_elements(
-            lon=lon, lat=lat, z='seafloor', radius=r, number=N, time=start_time)
+            lon=lon, lat=lat,  radius=r, number=N, time=start_time)
 
     particle_model.run(duration=duration, outfile=f"out/{outfile}",)
     if plot:
@@ -97,17 +97,18 @@ def run_model(*args, **kwargs):
 
 
 country = 'greece'
-url = get_readers([country])
+url = get_readers(country)
 
 
 duration = timedelta(5)
-start = datetime.utcnow()  - duration
+start = datetime.utcnow()  - duration  - timedelta(17)
 
 run_model(*url,
           outfile=f'run_{datetime.utcnow()}.nc',
           start_time=start,
           duration=duration,
           seed_from_json=get_current_json_file(country, 'finfish'),
-          N=1000,
+          N=60,
+          r=1000,
           plot=True
           )
